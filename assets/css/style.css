@@ -1,3 +1,4 @@
+/* Base typography & layout */
 body {
     font-family: sans-serif;
     margin: 0;
@@ -5,6 +6,7 @@ body {
     line-height: 1.6;
 }
 
+/* Header & footer */
 .site-header,
 .site-footer {
     background: #f8f8f8;
@@ -12,29 +14,65 @@ body {
     text-align: center;
 }
 
+/* Site title link */
 .site-header h1 a {
     text-decoration: none;
     color: #333;
 }
 
+/* Banner image */
+.site-header img.banner {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0 auto 1rem;
+}
+
+/* Dropdown selector for reports */
+#report-select {
+    margin: 0.5rem 0;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
+/* Main content & index page content */
 .content,
 .index-content {
     padding: 1rem;
 }
 
+/* Section headings */
 .content h2 {
     margin-top: 2rem;
     border-bottom: 1px solid #ddd;
     padding-bottom: 0.5rem;
 }
 
+/* Inline images (favicons, etc.) */
+.content img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 0.5em 0;
+}
+
+/* Link icon after every link in content */
+.content a::after {
+    content: url('{{ "assets/images/link-icon.svg" | relative_url }}');
+    margin-left: 4px;
+    vertical-align: text-bottom;
+}
+
+/* Lists */
 ul {
     list-style: none;
     padding: 0;
 }
 
-@media(min-width:600px) {
-
+/* Responsive max-width for wider screens */
+@media (min-width: 600px) {
     .content,
     .index-content {
         margin: auto;

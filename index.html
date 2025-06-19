@@ -1,26 +1,23 @@
+---
+layout: none
+permalink: /
+---
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>{{ site.title }}</title>
-  <!-- remove the extra leading “/” so you don’t get “//assets/…” -->
-  <link rel="stylesheet" href="{{ 'assets/css/style.css' | relative_url }}" />
+  <meta http-equiv="refresh"
+        content="0; url={{ site.reports | sort: 'date' | reverse | first.url }}" />
+  <title>Redirecting to latest AI Weekly Update…</title>
 </head>
 <body>
-  <header class="site-header">
-    <h1>{{ site.title }}</h1>
-    <p>Automated weekly AI news and research</p>
-  </header>
-  <main class="index-content">
-    <ul>
-      {% for rep in site.reports | sort: 'date' | reverse %}
-        <li><a href="{{ rep.url }}">{{ rep.title }}</a></li>
-      {% endfor %}
-    </ul>
-  </main>
-  <footer class="site-footer">
-    <p>Last updated: {{ site.time | date: '%Y-%m-%d' }}</p>
-  </footer>
+  <p>
+    Redirecting to the latest AI Weekly Update. 
+    If you’re not forwarded automatically, 
+    <a href="{{ site.reports | sort: 'date' | reverse | first.url }}">
+      click here
+    </a>.
+  </p>
 </body>
 </html>

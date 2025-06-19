@@ -2,150 +2,169 @@
 """
 generate_report.py
 
-Fetches the latest entries from a set of RSS/Atom feeds and
-generates a Markdown report with Jekyll front matter.
-
-Usage:
-    python3 generate_report.py
+Fetches the latest entries from a set of AI & Generative‐AI RSS feeds,
+filters by AI/gen-AI keywords, and writes a Jekyll‐compatible Markdown
+file under _reports/YYYY-MM-DD.md (up to 10 items per feed).
 """
 
-import datetime
-import pathlib
 import sys
 import time
+import datetime
+import pathlib
 
 import feedparser
 import requests
-from requests.exceptions import RequestException, HTTPError
+from requests.exceptions import HTTPError, RequestException
 
-# 1. List your feeds here (easy updates!)
-FEEDS = {
-    "ArXiv cs.AI":             "https://rss.arxiv.org/rss/cs.AI",
-    "ArXiv cs.LG":             "https://rss.arxiv.org/rss/cs.LG",
-    "ArXiv cs.CV":             "https://rss.arxiv.org/rss/cs.CV",
-    "Hacker News":             "https://hnrss.org/newest",
-    "Twitter (AI search)":     "https://rsshub.app/twitter/search/AI",
-    "Twitter @OpenAI":         "https://rsshub.app/twitter/user/OpenAI",
-    # Discord channels (using actual IDs):
-    "Discord #ai-discussion":  "https://rsshub.app/discord/channel/974519864045756446/998381918976479273",
-    "Discord #use-cases":      "https://rsshub.app/discord/channel/974519864045756446/1155775326253756456",
-    "Discord #api-projects":   "https://rsshub.app/discord/channel/974519864045756446/1037561385070112779",
-    "Import AI":               "https://importai.substack.com/feed",
-    "The Batch":               "https://www.deeplearning.ai/the-batch/rss/",
+# ------------------------------------------------------------------------------
+#  CONFIGURATION: AI & Generative AI feeds
+# ------------------------------------------------------------------------------
+RSS_FEEDS = {
+    "ArXiv cs.AI":                   "https://rss.arxiv.org/rss/cs.AI",
+    "ArXiv cs.LG":                   "https://rss.arxiv.org/rss/cs.LG",
+    "ArXiv cs.CV":                   "https://rss.arxiv.org/rss/cs.CV",
+
+    "Hacker News: AI":               "https://hnrss.org/newest?q=AI",
+    "Hacker News: Generative AI":    "https://hnrss.org/newest?q=Generative+AI",
+
+    "Import AI (Substack)":          "https://importai.substack.com/feed",
+    "OpenAI Blog":                   "https://openai.com/blog/rss.xml",
+    "DeepMind Blog":                 "https://deepmind.com/blog/feed/basic",
+    "Google AI":                     "https://blog.google/technology/ai/feed",
+
+    "Microsoft AI Blog":             "https://blogs.microsoft.com/ai/feed/",
+    "Machine Learning Mastery":      "https://machinelearningmastery.com/blog/feed/",
+    "VentureBeat AI":                "https://venturebeat.com/category/ai/feed/",
+    "TechCrunch AI":                 "https://techcrunch.com/tag/artificial-intelligence/feed/",
+
+    "MIT Technology Review – AI":    "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
+    "Synced – AI Technology Review": "https://syncedreview.com/feed/",
+    "Last Week in AI":               "https://lastweekin.ai/feed",
+    "MarkTechPost":                  "https://www.marktechpost.com/feed",
+    "The Gradient":                  "https://thegradient.pub/rss/",
 }
 
+# Only posts whose title or summary contain one of these keywords will be kept:
+KEYWORDS = [
+    "ai", "artificial intelligence", "machine learning",
+    "deep learning", "neural network", "generative",
+    "llm", "gpt", "transformer", "diffusion"
+]
 
-# Configuration for HTTP requests
-timeout_seconds = 10
-max_retries = 3
-retry_delay = 5  # seconds between retries
+TIMEOUT     = 20    # seconds per request
+MAX_RETRIES = 3     # retry non-404 failures
+RETRY_DELAY = 5     # seconds between retries
 
 
-def fetch_entries(limit=5):
+def matches_keyword(entry):
+    """Check if entry title or summary contains any KEYWORDS."""
+    text = " ".join([
+        entry.get("title", ""),
+        entry.get("summary", "")
+    ]).lower()
+    return any(kw in text for kw in KEYWORDS)
+
+
+def fetch_entries(limit=10):
     """
-    Fetch and parse each feed with retries on failure (except 404),
-    sort by date, and return a dict mapping feed name to list of entries.
+    Fetch & parse each feed URL with timeout/retries.
+    Filter each feed’s entries by KEYWORDS, taking newest-first
+    until `limit` items are collected. Return dict: feed name → list.
     """
     all_entries = {}
 
-    for name, url in FEEDS.items():
-        entries = []
-        for attempt in range(1, max_retries + 1):
+    for name, url in RSS_FEEDS.items():
+        matched = []
+        # get all entries sorted by date
+        for attempt in range(1, MAX_RETRIES + 1):
             try:
-                response = requests.get(url, timeout=timeout_seconds)
-                # 404 means the feed doesn't exist; stop retrying
-                if response.status_code == 404:
-                    print(f"[!] 404 Not Found for '{name}' ({url})", file=sys.stderr)
+                resp = requests.get(url, timeout=TIMEOUT)
+                if resp.status_code == 404:
+                    print(f"[!] 404 Not Found: {name}", file=sys.stderr)
                     break
-                response.raise_for_status()
+                resp.raise_for_status()
 
-                feed = feedparser.parse(response.content)
+                feed = feedparser.parse(resp.content)
                 if feed.bozo:
-                    print(f"[!] Warning: malformed feed '{name}' ({url})", file=sys.stderr)
+                    print(f"[!] Malformed feed for '{name}'", file=sys.stderr)
 
-                # Sort entries by published date if available
-                sorted_entries = sorted(
+                # sort by published date desc
+                candidates = sorted(
                     feed.entries,
                     key=lambda e: e.get("published_parsed", datetime.datetime.min),
                     reverse=True
-                )[:limit]
+                )
+                # keep only those matching keywords, up to limit
+                for entry in candidates:
+                    if matches_keyword(entry):
+                        published = entry.get("published") or entry.get("updated") or ""
+                        matched.append({
+                            "title":     entry.get("title", "No title"),
+                            "link":      entry.get("link", "#"),
+                            "published": published
+                        })
+                        if len(matched) >= limit:
+                            break
+                break  # success, stop retry loop
 
-                # Format entries
-                for e in sorted_entries:
-                    published = e.get("published") or e.get("updated") or ""
-                    entries.append({
-                        "title": e.get("title", "No title"),
-                        "link": e.get("link", "#"),
-                        "published": published
-                    })
+            except (HTTPError, RequestException) as err:
+                print(f"[!] Error fetching '{name}' (attempt {attempt}): {err}", file=sys.stderr)
+                if attempt < MAX_RETRIES:
+                    time.sleep(RETRY_DELAY)
+                else:
+                    print(f"[!] Skipping '{name}' after {MAX_RETRIES} attempts", file=sys.stderr)
 
-                # Successful fetch, stop retry loop
-                break
-
-            except HTTPError as he:
-                # Retry on HTTP errors except 404
-                print(f"[!] HTTP error on '{name}', attempt {attempt}/{max_retries}: {he}", file=sys.stderr)
-            except RequestException as re:
-                print(f"[!] Request error on '{name}', attempt {attempt}/{max_retries}: {re}", file=sys.stderr)
-            # Delay before next attempt (unless it was the last)
-            if attempt < max_retries:
-                time.sleep(retry_delay)
-            else:
-                print(f"[!] Failed to fetch '{name}' after {max_retries} attempts, skipping.", file=sys.stderr)
-
-        all_entries[name] = entries
+        all_entries[name] = matched
 
     return all_entries
 
 
 def build_md(entries):
-    """
-    Build the Markdown report text (with YAML front matter).
-    """
-    now = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+    """Build the Markdown with YAML front matter and inline favicons."""
+    now   = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     today = datetime.date.today().isoformat()
 
     lines = [
         "---",
         f"title: AI Weekly Update – {today}",
-        f"date: {now}",
+        f"date:  {now}",
         "layout: report",
-        "---",
-        ""
+        "---", ""
     ]
 
-    for source, items in entries.items():
-        lines.append(f"## {source}\n")
+    for src, items in entries.items():
+        # favicon via Google service
+        icon = f"https://www.google.com/s2/favicons?domain_url={RSS_FEEDS[src]}"
+        lines.append(f"![{src}]({icon})\n")
+        lines.append(f"## {src}\n")
         if items:
             for it in items:
                 lines.append(f"- [{it['title']}]({it['link']})  ")
                 if it["published"]:
                     lines.append(f"  _{it['published']}_")
         else:
-            lines.append("- _No updates found. Please check the feed URL or retry._")
+            lines.append("- _No AI/generative-AI posts found._")
         lines.append("")
 
     return "\n".join(lines)
 
 
 def write_report(md_text):
-    """
-    Write the Markdown to _reports/<YYYY-MM-DD>.md, creating the directory if needed.
-    """
-    today = datetime.date.today().isoformat()
+    """Write Markdown to _reports/YYYY-MM-DD.md (create folder if needed)."""
+    date_str   = datetime.date.today().isoformat()
     report_dir = pathlib.Path("_reports")
     report_dir.mkdir(exist_ok=True)
-    report_path = report_dir / f"{today}.md"
-    report_path.write_text(md_text, encoding="utf-8")
-    return report_path
+    path = report_dir / f"{date_str}.md"
+    path.write_text(md_text, encoding="utf-8")
+    return path
 
 
 if __name__ == "__main__":
     try:
-        entries = fetch_entries(limit=5)
-        md = build_md(entries)
-        path = write_report(md)
-        print(f"✅ Generated report: {path}")
+        data = fetch_entries(limit=10)
+        md   = build_md(data)
+        out  = write_report(md)
+        print(f"✅ Generated report: {out}")
     except Exception as e:
-        print(f"❌ Error: {e}", file=sys.stderr)
+        print(f"❌ Fatal error: {e}", file=sys.stderr)
         sys.exit(1)

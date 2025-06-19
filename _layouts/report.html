@@ -5,18 +5,61 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ page.title }}</title>
   <link rel="stylesheet" href="{{ 'assets/css/style.css' | relative_url }}" />
+  <style>
+    .content img {
+      max-width: 100%;
+      height: auto;
+      margin: 0.5em 0;
+      display: block;
+    }
+    .site-header img.banner {
+      max-width: 100%;
+      height: auto;
+      margin-bottom: 1em;
+      display: block;
+    }
+    #report-select {
+      margin: 0.5em 0;
+    }
+  </style>
 </head>
 <body>
   <header class="site-header">
-    <!-- link back home -->
+    <!-- Banner -->
+    <a href="{{ '/' | relative_url }}">
+      <img src="{{ 'assets/images/ai-weekly-banner.png' | relative_url }}"
+           alt="{{ site.title }}" class="banner" />
+    </a>
+
     <h1><a href="{{ '/' | relative_url }}">{{ site.title }}</a></h1>
     <p>{{ page.title }}</p>
+
+    <!-- Full-history dropdown -->
+    <select id="report-select">
+      {% assign all = site.reports | sort: 'date' | reverse %}
+      {% for rep in all %}
+        <option value="{{ rep.url | relative_url }}"
+                {% if rep.url == page.url %}selected{% endif %}>
+          {{ rep.title }}
+        </option>
+      {% endfor %}
+    </select>
   </header>
+
   <main class="content">
     {{ content }}
   </main>
+
   <footer class="site-footer">
-    <p>🔗 <a href="https://github.com/{{ site.github.repository_nwo }}">Source on GitHub</a></p>
+    🔗 <a href="https://github.com/{{ site.github.repository_nwo }}">
+      Source on GitHub
+    </a>
   </footer>
+
+  <script>
+    document.getElementById('report-select').addEventListener('change', function() {
+      window.location.href = this.value;
+    });
+  </script>
 </body>
 </html>
