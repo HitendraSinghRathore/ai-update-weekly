@@ -29,7 +29,7 @@ FEEDS = {
     # Replace YOUR_GUILD_ID and YOUR_CHANNEL_ID with real IDs:
     "Discord #ai-discussion":  "https://rsshub.app/discord/channel/974519864045756446/998381918976479273",
     "Discord #use-cases": "https://rsshub.app/discord/channel/974519864045756446/1155775326253756456",
-    "Discord #api-projects": "https://rsshub.app/discord/channel/974519864045756446/1037561385070112779"
+    "Discord #api-projects": "https://rsshub.app/discord/channel/974519864045756446/1037561385070112779",
     "Import AI":               "https://importai.substack.com/feed",
     "The Batch":               "https://www.deeplearning.ai/the-batch/rss/",
 }
