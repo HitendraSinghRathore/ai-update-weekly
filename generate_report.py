@@ -2,9 +2,9 @@
 """
 generate_report.py
 
-Fetches the latest entries from a set of AI & Generative‐AI RSS feeds,
-filters by AI/gen-AI keywords, and writes a Jekyll‐compatible Markdown
-file under _reports/YYYY-MM-DD.md (up to 10 items per feed).
+Fetches the latest entries from a set of AI & Generative-AI RSS feeds
+(only posts matching AI/gen-AI keywords), then writes a Jekyll-compatible
+Markdown file under _reports/YYYY-MM-DD.md (up to 10 items per feed).
 """
 
 import sys
@@ -17,8 +17,9 @@ import requests
 from requests.exceptions import HTTPError, RequestException
 
 # ------------------------------------------------------------------------------
-#  CONFIGURATION: AI & Generative AI feeds
+#  CONFIGURATION
 # ------------------------------------------------------------------------------
+
 RSS_FEEDS = {
     "ArXiv cs.AI":                   "https://rss.arxiv.org/rss/cs.AI",
     "ArXiv cs.LG":                   "https://rss.arxiv.org/rss/cs.LG",
@@ -27,16 +28,17 @@ RSS_FEEDS = {
     "Hacker News: AI":               "https://hnrss.org/newest?q=AI",
     "Hacker News: Generative AI":    "https://hnrss.org/newest?q=Generative+AI",
 
-    "Import AI (Substack)":          "https://importai.substack.com/feed",
+    "Import AI (Substack)":          "https://importai.substack.com/feed.xml",
     "OpenAI Blog":                   "https://openai.com/blog/rss.xml",
     "DeepMind Blog":                 "https://deepmind.com/blog/feed/basic",
-    "Google AI":                     "https://blog.google/technology/ai/feed",
+    # Use Google’s main blog RSS & let our filter pick AI posts
+    "Google Blog":                   "https://blog.google/rss",
+    # Switch Microsoft AI → Microsoft Research Blog
+    "Microsoft Research Blog":       "https://www.microsoft.com/en-us/research/feed/",
 
-    "Microsoft AI Blog":             "https://blogs.microsoft.com/ai/feed/",
     "Machine Learning Mastery":      "https://machinelearningmastery.com/blog/feed/",
-    "VentureBeat AI":                "https://venturebeat.com/category/ai/feed/",
     "TechCrunch AI":                 "https://techcrunch.com/tag/artificial-intelligence/feed/",
-
+    "VentureBeat AI":                "https://feeds.venturebeat.com/VentureBeat",
     "MIT Technology Review – AI":    "https://www.technologyreview.com/topic/artificial-intelligence/feed/",
     "Synced – AI Technology Review": "https://syncedreview.com/feed/",
     "Last Week in AI":               "https://lastweekin.ai/feed",
@@ -44,75 +46,65 @@ RSS_FEEDS = {
     "The Gradient":                  "https://thegradient.pub/rss/",
 }
 
-# Only posts whose title or summary contain one of these keywords will be kept:
+# Only keep entries whose title/summary mention one of these:
 KEYWORDS = [
     "ai", "artificial intelligence", "machine learning",
     "deep learning", "neural network", "generative",
     "llm", "gpt", "transformer", "diffusion"
 ]
 
-TIMEOUT     = 20    # seconds per request
-MAX_RETRIES = 3     # retry non-404 failures
-RETRY_DELAY = 5     # seconds between retries
+TIMEOUT     = 20   # seconds per request
+MAX_RETRIES = 3    # retry non-404 failures
+RETRY_DELAY = 5    # seconds between retries
 
 
 def matches_keyword(entry):
-    """Check if entry title or summary contains any KEYWORDS."""
     text = " ".join([
         entry.get("title", ""),
         entry.get("summary", "")
     ]).lower()
-    return any(kw in text for kw in KEYWORDS)
+    return any(k in text for k in KEYWORDS)
 
 
 def fetch_entries(limit=10):
-    """
-    Fetch & parse each feed URL with timeout/retries.
-    Filter each feed’s entries by KEYWORDS, taking newest-first
-    until `limit` items are collected. Return dict: feed name → list.
-    """
     all_entries = {}
-
     for name, url in RSS_FEEDS.items():
         matched = []
-        # get all entries sorted by date
-        for attempt in range(1, MAX_RETRIES + 1):
+        for attempt in range(1, MAX_RETRIES+1):
             try:
-                resp = requests.get(url, timeout=TIMEOUT)
-                if resp.status_code == 404:
+                r = requests.get(url, timeout=TIMEOUT)
+                if r.status_code == 404:
                     print(f"[!] 404 Not Found: {name}", file=sys.stderr)
                     break
-                resp.raise_for_status()
+                r.raise_for_status()
 
-                feed = feedparser.parse(resp.content)
+                feed = feedparser.parse(r.content)
                 if feed.bozo:
                     print(f"[!] Malformed feed for '{name}'", file=sys.stderr)
 
-                # sort by published date desc
-                candidates = sorted(
+                # sort newest first, then filter by keyword
+                for e in sorted(
                     feed.entries,
                     key=lambda e: e.get("published_parsed", datetime.datetime.min),
                     reverse=True
-                )
-                # keep only those matching keywords, up to limit
-                for entry in candidates:
-                    if matches_keyword(entry):
-                        published = entry.get("published") or entry.get("updated") or ""
+                ):
+                    if matches_keyword(e):
+                        pub = e.get("published", "") or e.get("updated", "")
                         matched.append({
-                            "title":     entry.get("title", "No title"),
-                            "link":      entry.get("link", "#"),
-                            "published": published
+                            "title":     e.get("title", "No title"),
+                            "link":      e.get("link", "#"),
+                            "published": pub
                         })
                         if len(matched) >= limit:
                             break
-                break  # success, stop retry loop
+                break
 
             except (HTTPError, RequestException) as err:
                 print(f"[!] Error fetching '{name}' (attempt {attempt}): {err}", file=sys.stderr)
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY)
                 else:
-                    print(f"[!] Skipping '{name}' after {MAX_RETRIES} attempts", file=sys.stderr)
+                    print(f"[!] Giving up on '{name}' after {MAX_RETRIES} attempts", file=sys.stderr)
 
         all_entries[name] = matched
 
@@ -120,7 +112,6 @@ def fetch_entries(limit=10):
 
 
 def build_md(entries):
-    """Build the Markdown with YAML front matter and inline favicons."""
     now   = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
     today = datetime.date.today().isoformat()
 
@@ -133,8 +124,10 @@ def build_md(entries):
     ]
 
     for src, items in entries.items():
-        # favicon via Google service
-        icon = f"https://www.google.com/s2/favicons?domain_url={RSS_FEEDS[src]}"
+        icon = (
+            f"https://www.google.com/s2/favicons?"
+            f"domain_url={RSS_FEEDS[src]}"
+        )
         lines.append(f"![{src}]({icon})\n")
         lines.append(f"## {src}\n")
         if items:
@@ -150,7 +143,6 @@ def build_md(entries):
 
 
 def write_report(md_text):
-    """Write Markdown to _reports/YYYY-MM-DD.md (create folder if needed)."""
     date_str   = datetime.date.today().isoformat()
     report_dir = pathlib.Path("_reports")
     report_dir.mkdir(exist_ok=True)
