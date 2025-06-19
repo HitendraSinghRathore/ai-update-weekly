@@ -1,0 +1,13 @@
+# Site settings
+title: AI Weekly Updates
+theme: minima
+markdown: kramdown
+
+collections:
+  reports:
+    output: true
+    permalink: /:collection/:name/
+
+exclude:
+  - generate_report.py
+  - requirements.txt
