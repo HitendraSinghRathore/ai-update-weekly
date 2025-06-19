@@ -1,9 +1,12 @@
-name: Weekly AI Report
+name: "Weekly AI Report"
+
+permissions:
+  contents: write
 
 on:
   schedule:
-    # runs every Saturday at 09:00 UTC → 14:30 IST
-    - cron:  '0 9 * * SAT'
+    # Runs every Saturday at 09:00 UTC → 14:30 IST
+    - cron: '0 9 * * SAT'
   workflow_dispatch:
 
 jobs:
@@ -29,12 +32,12 @@ jobs:
       - name: Generate AI Weekly Update
         run: python generate_report.py
 
-      - name: Commit report
+      - name: Commit and Push Report
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add _reports/*.md
           git commit -m "📝 Weekly AI update: $(date +'%Y-%m-%d')" || echo "No changes to commit"
           git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
