@@ -70,26 +70,40 @@ def fetch_entries(limit=10):
     all_entries = {}
     for name, url in RSS_FEEDS.items():
         matched = []
-        for attempt in range(1, MAX_RETRIES+1):
+
+        for attempt in range(1, MAX_RETRIES + 1):
             try:
                 r = requests.get(url, timeout=TIMEOUT)
-                if r.status_code == 404:
-                    print(f"[!] 404 Not Found: {name}", file=sys.stderr)
+
+                # skip immediately on forbidden or missing
+                if r.status_code in (403, 404):
+                    print(f"[!] {r.status_code} for '{name}' ({url})—skipping.", file=sys.stderr)
                     break
+
                 r.raise_for_status()
 
-                feed = feedparser.parse(r.content)
-                if feed.bozo:
-                    print(f"[!] Malformed feed for '{name}'", file=sys.stderr)
+                # Decode into a Unicode string, replacing bad bytes if needed
+                try:
+                    text = r.content.decode(r.encoding or 'utf-8')
+                except (LookupError, UnicodeDecodeError):
+                    text = r.content.decode('utf-8', errors='replace')
 
-                # sort newest first, then filter by keyword
+                # Parse the feed
+                feed = feedparser.parse(text)
+
+                # If it's malformed, log the exception but continue
+                if feed.bozo:
+                    ex = getattr(feed, "bozo_exception", "Unknown error")
+                    print(f"[!] Malformed feed for '{name}': {ex}—attempting to salvage entries.", file=sys.stderr)  # :contentReference[oaicite:0]{index=0}
+
+                # Sort newest first and filter by your keywords
                 for e in sorted(
                     feed.entries,
                     key=lambda e: e.get("published_parsed", datetime.datetime.min),
                     reverse=True
                 ):
                     if matches_keyword(e):
-                        pub = e.get("published", "") or e.get("updated", "")
+                        pub = e.get("published") or e.get("updated") or ""
                         matched.append({
                             "title":     e.get("title", "No title"),
                             "link":      e.get("link", "#"),
@@ -97,18 +111,21 @@ def fetch_entries(limit=10):
                         })
                         if len(matched) >= limit:
                             break
+
+                # Done with this feed (whether malformed or not)
                 break
 
             except (HTTPError, RequestException) as err:
-                print(f"[!] Error fetching '{name}' (attempt {attempt}): {err}", file=sys.stderr)
+                print(f"[!] Error fetching '{name}' (attempt {attempt}/{MAX_RETRIES}): {err}", file=sys.stderr)
                 if attempt < MAX_RETRIES:
                     time.sleep(RETRY_DELAY)
                 else:
-                    print(f"[!] Giving up on '{name}' after {MAX_RETRIES} attempts", file=sys.stderr)
+                    print(f"[!] Giving up on '{name}' after {MAX_RETRIES} attempts.", file=sys.stderr)
 
         all_entries[name] = matched
 
     return all_entries
+
 
 
 def build_md(entries):

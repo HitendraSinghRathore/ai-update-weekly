@@ -7,8 +7,9 @@ permalink: /
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta http-equiv="refresh" content="0; url={{ site.reports | sort: 'date' | reverse | first.url }}" />
-  <title>Redirecting to latest AI Weekly Update…</title>
+ {% assign sorted_reports = site.reports | sort: 'date' | reverse %}
+<meta http-equiv="refresh"  content="0; url={{ sorted_reports.first.url | relative_url }}" />  
+<title>Redirecting to latest AI Weekly Update…</title>
 </head>
 <body>
   <p>
